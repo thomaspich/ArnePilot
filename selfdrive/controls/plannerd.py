@@ -27,7 +27,7 @@ def plannerd_thread(sm=None, pm=None):
                              poll=['radarState', 'model'])
 
   if pm is None:
-    pm = messaging.PubMaster(['plan', 'liveLongitudinalMpc', 'pathPlan', 'liveMpc'])
+    pm = messaging.PubMaster(['plan', 'liveLongitudinalMpc', 'pathPlan', 'liveMpc', 'latControl'])
 
   sm['liveParameters'].valid = True
   sm['liveParameters'].sensorValid = True
