@@ -8,6 +8,7 @@
 #include <map>
 #include <cmath>
 #include <iostream>
+#include "common/timing.h"
 #include "common/util.h"
 #include <algorithm>
 
@@ -108,7 +109,7 @@ static void draw_chevron(UIState *s, float x_in, float y_in, float sz,
 static void ui_draw_circle_image(NVGcontext *vg, float x, float y, int size, int image, NVGcolor color, float img_alpha, int img_y = 0) {
   const int img_size = size * 1.5;
   nvgBeginPath(vg);
-  nvgCircle(vg, x, y + (bdr_s * 1.5), size);
+  nvgCircle(vg, x, y + (bdr_is * 1.5), size);
   nvgFillColor(vg, color);
   nvgFill(vg);
   ui_draw_image(vg, x - (img_size / 2), img_y ? img_y : y - (size / 4), img_size, img_size, image, img_alpha);
@@ -134,7 +135,7 @@ static void draw_lead(UIState *s, const cereal::RadarState::LeadData::Reader &le
     }
     fillAlpha = (int)(fmin(fillAlpha, 255));
   }
-  draw_chevron(s, d_rel, lead.getYRel(), 25, nvgRGBA(201, 34, 49, fillAlpha), COLOR_YELLOW);
+  draw_chevron(s, d_rel, lead.getYRel(), 25, nvgRGBA(20, 20, 20, fillAlpha), nvgRGBA(255, 255, 255, 255));
 }
 
 static void ui_draw_line(UIState *s, const vertex_data *v, const int cnt, NVGcolor *color, NVGpaint *paint) {
@@ -415,6 +416,51 @@ static void ui_draw_vision_speedlimit(UIState *s) {
   }
 }
 
+static void ui_draw_vision_road_info(UIState *s) {
+  if (!s->scene.gps_planner_points.getValid()) {
+    return;
+  }
+
+  // Road name
+  if (s->scene.track_name.length()) {
+    // TODO: split evenly onto 2 lines if too wide (maybe can split on ',')
+    nvgTextAlign(s->vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+    ui_draw_text(s->vg, s->scene.viz_rect.x + (bdr_s*2), 350, s->scene.track_name.c_str(), 20 * 2.5, COLOR_WHITE, s->font_sans_semibold);
+  }
+
+  // Speed limit
+  float speedlimit = s->scene.gps_planner_points.getSpeedLimit();
+  if (speedlimit <= 0) {
+    return;
+  }
+  char speedlimit_str[32];
+  int speedlimit_calc = speedlimit * 0.6225 + 0.5;
+  if (s->is_metric) {
+    speedlimit_calc = speedlimit + 0.5;
+  }
+
+  int viz_speedlimit_w = 184;
+  int viz_speedlimit_h = 202;
+  int viz_speedlimit_x = (s->video_rect.x + (bdr_s*9));
+  int viz_speedlimit_y = (s->video_rect.y + (bdr_s*1.5));
+
+  // background
+  ui_draw_rect(s->vg, viz_speedlimit_x, viz_speedlimit_y, viz_speedlimit_w, viz_speedlimit_h, COLOR_BLACK_ALPHA(100), 30);
+
+  // border
+  ui_draw_rect(s->vg, viz_speedlimit_x, viz_speedlimit_y, viz_speedlimit_w, viz_speedlimit_h, COLOR_WHITE, 20, 10);
+
+  // title
+  nvgTextAlign(s->vg, NVG_ALIGN_CENTER | NVG_ALIGN_BASELINE);
+  const int text_x = viz_speedlimit_x + (viz_speedlimit_w / 2);
+  ui_draw_text(s->vg, text_x, 125, "SPEED", 18 * 2.5, COLOR_WHITE, s->font_sans_semibold);
+  ui_draw_text(s->vg, text_x, 160, "LIMIT", 18 * 2.5, COLOR_WHITE, s->font_sans_semibold);
+
+  // value
+  snprintf(speedlimit_str, sizeof(speedlimit_str), "%d", speedlimit_calc);
+  ui_draw_text(s->vg, text_x, 242, speedlimit_str, 48 * 2.5, COLOR_WHITE, s->font_sans_bold);
+}
+
 static void ui_draw_vision_speed(UIState *s) {
   const Rect &viz_rect = s->scene.viz_rect;
   float v_ego = s->scene.controls_state.getVEgo();
@@ -480,10 +526,10 @@ static void ui_draw_vision_event(UIState *s) {
   } else if (s->scene.controls_state.getDecelForModel() && s->scene.controls_state.getEnabled()) {
     // draw winding road sign
     const int img_turn_size = 160*1.5*0.82;
-    ui_draw_image(s->vg, viz_event_x - (img_turn_size / 4), viz_event_y + bdr_is - 25, img_turn_size, img_turn_size, s->img_turn, 1.0f);
+    ui_draw_image(s->vg, viz_event_x - (img_turn_size / 4) + 80, viz_event_y + bdr_is - 45, img_turn_size, img_turn_size, s->img_turn, 1.0f);
   } else if (s->scene.controls_state.getEngageable()) {
     // draw steering wheel
-    const int bg_wheel_size = 96;
+    const int bg_wheel_size = 90;
     const int bg_wheel_x = viz_event_x + (viz_event_w-bg_wheel_size);
     const int bg_wheel_y = viz_event_y + (bg_wheel_size/2);
     const NVGcolor color = bg_colors[s->status];
@@ -492,18 +538,18 @@ static void ui_draw_vision_event(UIState *s) {
   }
 }
 
-static void ui_draw_vision_map(UIState *s) {
-  const int map_size = 96;
-  const int map_x = (s->video_rect.x + (map_size * 3) + (bdr_s * 3));
-  const int map_y = (s->scene.viz_rect.bottom() + ((footer_h - map_size) / 2));
-  ui_draw_circle_image(s->vg, map_x, map_y, map_size, s->img_map, s->scene.map_valid);
-}
-
 static void ui_draw_vision_face(UIState *s) {
-  const int face_size = 96;
+  const int face_size = 90;
   const int face_x = (s->scene.viz_rect.x + face_size + (bdr_is * 2));
   const int face_y = (s->scene.viz_rect.bottom() - footer_h + ((footer_h - face_size) / 2));
-  ui_draw_circle_image(s->vg, face_x, face_y, face_size, s->img_face, s->scene.dmonitoring_state.getFaceDetected());
+  ui_draw_circle_image(s->vg, face_x, face_y+border_shifter+25, face_size, s->img_face, s->scene.dmonitoring_state.getFaceDetected());
+}
+
+static void ui_draw_vision_map(UIState *s) {
+  const int map_size = 90;
+  const int map_x = (s->video_rect.x + (map_size * 3) + (bdr_is * 3));
+  const int map_y = (s->scene.viz_rect.bottom() + ((footer_h - map_size) / 2));
+  ui_draw_circle_image(s->vg, map_x, map_y, map_size, s->img_map, s->scene.map_valid);
 }
 
 static void ui_draw_driver_view(UIState *s) {
@@ -556,7 +602,7 @@ static void ui_draw_driver_view(UIState *s) {
   const int face_size = 85;
   const int x = (valid_frame_x + face_size + (bdr_s * 2)) + (scene->is_rhd ? valid_frame_w - box_h / 2:0);
   const int y = (box_y + box_h - face_size - bdr_s - (bdr_s * 1.5));
-  ui_draw_circle_image(s->vg, x, y, face_size, s->img_face, scene->dmonitoring_state.getFaceDetected());
+  ui_draw_circle_image(s->vg, x, y+border_shifter+25, face_size-5, s->img_face, scene->dmonitoring_state.getFaceDetected());
 }
 
 static void ui_draw_df_button(UIState *s) {
@@ -583,7 +629,6 @@ static void ui_draw_df_button(UIState *s) {
   nvgText(s->vg, btn_x - 34, btn_y + 50 + 15, "profile", NULL);
 }
 
-
 static void ui_draw_vision_header(UIState *s) {
   const Rect &viz_rect = s->scene.viz_rect;
   if (!s->scene.dpFullScreenApp) {
@@ -596,6 +641,7 @@ static void ui_draw_vision_header(UIState *s) {
   if (s->scene.dpUiMaxSpeed) {
   ui_draw_vision_maxspeed(s);
   ui_draw_vision_speedlimit(s);
+  ui_draw_vision_road_info(s);
   }
   if (s->scene.dpUiSpeed) {
   ui_draw_vision_speed(s);

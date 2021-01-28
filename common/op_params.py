@@ -87,9 +87,10 @@ class opParams:
                                                                "retaining the smoothness and safety of dynamic follow!", live=True),
                         #'eco_mode': Param(False, bool, "Default to eco instead of normal."),
                         #'force_pedal': Param(False, bool, "If openpilot isn't recognizing your comma pedal, set this to True"),
-                        'global_df_mod': Param(1.0, VT.number, 'The multiplier for the current distance used by dynamic follow. The range is limited from 0.85 to 2.5\n'
-                                                               'Smaller values will get you closer, larger will get you farther\n'
-                                                               'This is multiplied by any profile that\'s active. Set to 1. to disable', live=True),
+
+                        'global_df_mod': Param(None, VT.none_or_number, 'The multiplier for the current distance used by dynamic follow. The range is limited from 0.85 to 1.2\n'
+                                                                        'Smaller values will get you closer, larger will get you farther\n'
+                                                                        'This is multiplied by any profile that\'s active. Set to None to disable', live=True),
                         'hide_auto_df_alerts': Param(False, bool, 'Hides the alert that shows what profile the model has chosen'),
                         #'hotspot_on_boot': Param(False, bool, 'Enable Hotspot On Boot'),
                         'keep_openpilot_engaged': Param(True, bool, 'True is stock behavior in this fork. False lets you use the brake and cruise control stalk to disengage as usual'),
@@ -107,14 +108,14 @@ class opParams:
                         'smart_speed_max_vego': Param(26.8, VT.number, 'Speed limit to ignore Smartspeed in m/s'),
                         #'spairrowtuning': Param(False, bool, 'INDI Tuning for Corolla Tss2, set steer_up_15 param to True and flash panda'),
                         'speed_offset': Param(0, VT.number, 'Speed limit offset in m/s', live=True),
-                        'steer_actuator_delay': Param(0.5, VT.number, 'The steer actuator delay', live=True),
+                        'steer_actuator_delay': Param(0.45, VT.number, 'The steer actuator delay', live=True),
                         #'steer_up_15': Param(False, bool, 'Increase rate of steering up to 15, may fault on some cars'),
                         #'traffic_light_alerts': Param(False, bool, "Switch off the traffic light alerts"),
                         'traffic_lights': Param(False, bool, "Should Openpilot stop for traffic lights"),
                         'traffic_lights_without_direction': Param(False, bool, "Should Openpilot stop for traffic lights without a direction specified"),
                         #'use_car_caching': Param(True, bool, 'Whether to use fingerprint caching'),
-                        'min_TR': Param(0.9, VT.number, 'The minimum allowed following distance in seconds. Default is 0.9 seconds.\n'
-                                                        'The range is limited from 0.85 to 1.6.', live=True),
+                        'min_TR': Param(None, VT.none_or_number, 'The minimum allowed following distance in seconds. Default is 0.9 seconds.\n'
+                                                                 'The range is limited from 0.85 to 1.3. Set to None to disable', live=True),
                         #'use_virtual_middle_line': Param(False, bool, 'For roads over 4m wide, hug right. For roads under 2m wide, hug left.'),
                         'uniqueID': Param(None, [type(None), str], 'User\'s unique ID'),
                         'update_behavior': Param('auto', str, 'Can be: (\'off\', \'alert\', \'auto\') without quotes\n'
@@ -122,14 +123,14 @@ class opParams:
                                                               'auto will reboot the device when an update is seen'),
                         'enable_indi_live': Param(False, bool, live=True),
                         'indi_inner_gain_bp': Param([18, 22, 26], [list, float, int], live=True, depends_on='enable_indi_live'),
-                        'indi_inner_gain_v': Param([5, 10, 15], [list, float, int], live=True, depends_on='enable_indi_live'),
+                        'indi_inner_gain_v': Param([9, 12, 15], [list, float, int], live=True, depends_on='enable_indi_live'),
                         'indi_outer_gain_bp': Param([18, 22, 26], [list, float, int], live=True, depends_on='enable_indi_live'),
-                        'indi_outer_gain_v': Param([4, 9, 14.99], [list, float, int], live=True, depends_on='enable_indi_live'),
+                        'indi_outer_gain_v': Param([8, 11, 14.99], [list, float, int], live=True, depends_on='enable_indi_live'),
                         'indi_time_constant_bp': Param([18, 22, 26], [list, float, int], live=True, depends_on='enable_indi_live'),
-                        'indi_time_constant_v': Param([2, 4, 5.5], [list, float, int], live=True, depends_on='enable_indi_live'),
+                        'indi_time_constant_v': Param([1, 3, 4.5], [list, float, int], live=True, depends_on='enable_indi_live'),
                         'indi_actuator_effectiveness_bp': Param([18, 22, 26], [list, float, int], live=True, depends_on='enable_indi_live'),
-                        'indi_actuator_effectiveness_v': Param([5, 10, 15], [list, float, int], live=True, depends_on='enable_indi_live'),
-                        'steer_limit_timer': Param(0.4, VT.number, live=True, depends_on='enable_indi_live')
+                        'indi_actuator_effectiveness_v': Param([9, 12, 15], [list, float, int], live=True, depends_on='enable_indi_live'),
+                        'steer_limit_timer': Param(5.0, VT.number, live=True, depends_on='enable_indi_live')
                        }
 
     self._params_file = '/data/op_params.json'
