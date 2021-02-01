@@ -315,11 +315,19 @@ class CarInterface(CarInterfaceBase):
       stop_and_go = True
       ret.safetyParam = 100
       ret.wheelbase = 2.60
-      ret.steerRatio = 18.6
+      ret.steerRatio = 15.74
       tire_stiffness_factor = 0.517
-      ret.mass = 3108 * CV.LB_TO_KG + STD_CARGO_KG  # mean between min and max
-      ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.3], [0.05]]
-      ret.lateralTuning.pid.kfV = [0.00007]
+      ret.mass = 3108 * CV.LB_TO_KG + STD_CARGO_KG
+      ret.lateralTuning.init('indi')
+      ret.lateralTuning.indi.innerLoopGainBP = [0]
+      ret.lateralTuning.indi.innerLoopGainV = [3.8]
+      ret.lateralTuning.indi.outerLoopGainBP = [0]
+      ret.lateralTuning.indi.outerLoopGainV = [2.8]
+      ret.lateralTuning.indi.timeConstantBP = [0]
+      ret.lateralTuning.indi.timeConstantV = [1.0]
+      ret.lateralTuning.indi.actuatorEffectivenessBP = [0]
+      ret.lateralTuning.indi.actuatorEffectivenessV = [1.0]
+      ret.steerActuatorDelay = 0.5
 
     elif candidate in [CAR.LEXUS_NXH, CAR.LEXUS_NX]:
       stop_and_go = True
