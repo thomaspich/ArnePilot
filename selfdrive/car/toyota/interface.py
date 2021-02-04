@@ -61,6 +61,24 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.indi.actuatorEffectivenessV = [1.0]
       ret.steerActuatorDelay = 0.5
 
+    elif candidate == CAR.LEXUS_CTH:
+      stop_and_go = True
+      ret.safetyParam = 100
+      ret.wheelbase = 2.60
+      ret.steerRatio = 15.74
+      tire_stiffness_factor = 0.517
+      ret.mass = 3108 * CV.LB_TO_KG + STD_CARGO_KG
+      ret.lateralTuning.init('indi')    
+      ret.lateralTuning.indi.innerLoopGainBP = [18, 22, 26]
+      ret.lateralTuning.indi.innerLoopGainV = [5, 10, 15]
+      ret.lateralTuning.indi.outerLoopGainBP = [18, 22, 26]
+      ret.lateralTuning.indi.outerLoopGainV = [4, 11, 14.99]
+      ret.lateralTuning.indi.timeConstantBP = [18, 22, 26]
+      ret.lateralTuning.indi.timeConstantV = [2, 4, 5.5]
+      ret.lateralTuning.indi.actuatorEffectivenessBP = [18, 22, 26]
+      ret.lateralTuning.indi.actuatorEffectivenessV = [5, 10, 15]  
+      ret.steerActuatorDelay = 0.5
+      
     elif candidate == CAR.PRIUS_TSS2:
       #ret.longitudinalTuning.kpV = [0.4, 0.36, 0.325]  # braking tune from rav4h
       #ret.longitudinalTuning.kiV = [0.195, 0.10]
@@ -310,24 +328,6 @@ class CarInterface(CarInterfaceBase):
       ret.mass = 3736.8 * CV.LB_TO_KG + STD_CARGO_KG
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.3], [0.05]]
       ret.lateralTuning.pid.kfV = [0.00006]
-
-    elif candidate == CAR.LEXUS_CTH:
-      stop_and_go = True
-      ret.safetyParam = 100
-      ret.wheelbase = 2.60
-      ret.steerRatio = 15.74
-      tire_stiffness_factor = 0.517
-      ret.mass = 3108 * CV.LB_TO_KG + STD_CARGO_KG
-      ret.lateralTuning.init('indi')
-      ret.lateralTuning.indi.innerLoopGainBP = [0]
-      ret.lateralTuning.indi.innerLoopGainV = [3.8]
-      ret.lateralTuning.indi.outerLoopGainBP = [0]
-      ret.lateralTuning.indi.outerLoopGainV = [2.8]
-      ret.lateralTuning.indi.timeConstantBP = [0]
-      ret.lateralTuning.indi.timeConstantV = [1.0]
-      ret.lateralTuning.indi.actuatorEffectivenessBP = [0]
-      ret.lateralTuning.indi.actuatorEffectivenessV = [1.0]
-      ret.steerActuatorDelay = 0.5
 
     elif candidate in [CAR.LEXUS_NXH, CAR.LEXUS_NX]:
       stop_and_go = True
