@@ -1901,6 +1901,8 @@ struct Joystick {
   # convenient for debug and live tuning
   axes @0: List(Float32);
   buttons @1: List(Bool);
+  enabled @2: Bool;
+  axesMode @3: List(Text);
 }
 
 struct OrbOdometry {
@@ -1998,6 +2000,16 @@ struct DMonitoringState {
   isPreview @15 :Bool;
 
   rhdCheckedDEPRECATED @5 :Bool;
+  handsOnWheelState @16 :HandsOnWheelState;
+
+  enum HandsOnWheelState {
+    none @0;          # hand on wheel monitoring inactive
+    ok @1;            # driver has hands on steering wheel
+    minor @2;         # hands off steering wheel for acceptable period
+    warning @3;       # hands off steering wheel for warning period
+    critical @4;      # # hands off steering wheel for critical period
+    terminal @5;      # # hands off steering wheel for terminal period
+  }
 }
 
 struct Boot {
@@ -2064,6 +2076,19 @@ struct Sentinel {
     startOfRoute @3;
   }
   type @0 :SentinelType;
+}
+
+struct TrafficModelRaw {
+  prediction @0 :List(Float32);
+}
+
+struct TrafficModelEvent {
+  status @0 :Text;
+  confidence @1 :Float32;
+}
+
+struct LatControl {
+  anglelater @0 :Float32;
 }
 
 struct Event {
@@ -2149,7 +2174,10 @@ struct Event {
     frontEncodeIdx @76 :EncodeIndex; # driver facing camera
     wideEncodeIdx @77 :EncodeIndex;
     dragonConf @78 :DragonConf;
-    liveTrafficData @79:LiveTrafficData;
+    liveTrafficData @79 :LiveTrafficData;
+    trafficModelRaw @80 :TrafficModelRaw;
+    trafficModelEvent @81 :TrafficModelEvent;
+    latControl @82:LatControl;
   }
 }
 

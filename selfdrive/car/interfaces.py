@@ -17,6 +17,7 @@ MAX_CTRL_SPEED = (V_CRUISE_MAX + 4) * CV.KPH_TO_MS  # 144 + 4 = 92 mph
 
 class CarInterfaceBase():
   def __init__(self, CP, CarController, CarState):
+    self.waiting = False
     self.keep_openpilot_engaged = True
     self.disengage_due_to_slow_speed = False
     self.CP = CP
@@ -36,6 +37,7 @@ class CarInterfaceBase():
       self.CC = CarController(self.cp.dbc_name, CP, self.VM)
 
     self.dragonconf = None
+    self.lkas = 1
 
   @staticmethod
   def calc_accel_override(a_ego, a_target, v_ego, v_target):
@@ -71,7 +73,7 @@ class CarInterfaceBase():
     ret.brakeMaxBP = [0.]
     ret.brakeMaxV = [1.]
     ret.openpilotLongitudinalControl = False
-    ret.startAccel = 1.2
+    ret.startAccel = 1.0
     ret.minSpeedCan = 0.3
     ret.stoppingBrakeRate = 0.2 # brake_travel/s while trying to stop
     ret.startingBrakeRate = 0.8 # brake_travel/s while releasing on restart
@@ -100,9 +102,15 @@ class CarInterfaceBase():
     if cs_out.seatbeltUnlatched:
       events.add(EventName.seatbeltNotLatched)
     if self.dragonconf.dpGearCheck and cs_out.gearShifter != GearShifter.drive and cs_out.gearShifter not in extra_gears:
-      events.add(EventName.wrongGear)
+      if cs_out.vEgo < 5:
+        events.add(EventName.wrongGearArne)
+      else:
+        events.add(EventName.wrongGear)
     if cs_out.gearShifter == GearShifter.reverse:
-      events.add(EventName.reverseGear)
+      if cs_out.vEgo < 5:
+        events.add(EventName.reverseGearArne)
+      else:
+        events.add(EventName.reverseGear)
     if not self.dragonconf.dpAtl and not cs_out.cruiseState.available:
       events.add(EventName.wrongCarMode)
     if cs_out.espDisabled:

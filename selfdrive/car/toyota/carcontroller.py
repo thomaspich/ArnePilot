@@ -4,9 +4,12 @@ from selfdrive.car import apply_toyota_steer_torque_limits, create_gas_command, 
 from selfdrive.car.toyota.toyotacan import create_steer_command, create_ui_command, \
                                            create_accel_command, create_acc_cancel_command, \
                                            create_fcw_command
-from selfdrive.car.toyota.values import Ecu, CAR, STATIC_MSGS, NO_STOP_TIMER_CAR, SteerLimitParams
+from selfdrive.car.toyota.values import Ecu, CAR, STATIC_MSGS, NO_STOP_TIMER_CAR, SteerLimitParams, TSS2_CAR
 from opendbc.can.packer import CANPacker
 from common.dp_common import common_controller_ctrl
+from common.op_params import opParams
+
+speed_signs_in_mph = opParams().get('speed_signs_in_mph')
 
 VisualAlert = car.CarControl.HUDControl.VisualAlert
 
@@ -15,6 +18,80 @@ ACCEL_HYST_GAP = 0.02  # don't change accel command for small oscilalitons withi
 ACCEL_MAX = 3.5  # 3.5 m/s2
 ACCEL_MIN = -3.5 # 3.5 m/s2
 ACCEL_SCALE = max(ACCEL_MAX, -ACCEL_MIN)
+
+# Blindspot codes
+LEFT_BLINDSPOT = b'\x41'
+RIGHT_BLINDSPOT = b'\x42'
+BLINDSPOTALWAYSON = False
+
+def set_blindspot_debug_mode(lr,enable):
+  if enable:
+    m = lr + b'\x02\x10\x60\x00\x00\x00\x00'
+  else:
+    m = lr + b'\x02\x10\x01\x00\x00\x00\x00'
+  return make_can_msg(0x750, m, 0)
+
+
+def poll_blindspot_status(lr):
+  m = lr + b'\x02\x21\x69\x00\x00\x00\x00'
+  return make_can_msg(0x750, m, 0)
+
+def create_rsa1_command(packer,TSGN1,SPDVAL1,SPLSGN1,TSGNHLT1,TSGN2,SPDVAL2,SPLSGN2,TSGNHLT2,SYNCID1):
+ """Creates a CAN message for the Road Sign System."""
+ values = {
+   "TSGN1": TSGN1,
+   "TSGNGRY1": 0,
+   "TSGNHLT1": TSGNHLT1,
+   "SPDVAL1": SPDVAL1,
+   "SPLSGN1": SPLSGN1,
+   "SPLSGN2": SPLSGN2,
+   "TSGN2": TSGN2,
+   "TSGNGRY2": 0,
+   "TSGNHLT2": TSGNHLT2,
+   "SPDVAL2": SPDVAL2,
+   "BZRRQ_P": 0,
+   "BZRRQ_A": 0,
+   "SYNCID1": SYNCID1,
+ }
+
+ return packer.make_can_msg("RSA1", 0, values)
+
+def create_rsa2_command(packer,TSGN3,SPLSGN3,TSGN4,SPLSGN4,DPSGNREQ,SGNNUMP,SGNNUMA,SPDUNT,SYNCID2):
+ """Creates a CAN message for the Road Sign System."""
+ values = {
+   "TSGN3": TSGN3,
+   "TSGNGRY3": 0,
+   "TSGNHLT3": 0,
+   "SPLSGN3": SPLSGN3,
+   "SPLSGN4": SPLSGN4,
+   "TSGN4": TSGN4,
+   "TSGNGRY4": 0,
+   "TSGNHLT4": 0,
+   "DPSGNREQ": DPSGNREQ,
+   "SGNNUMP": SGNNUMP,
+   "SGNNUMA": SGNNUMA,
+   "SPDUNT": SPDUNT,
+   "TSRWMSG": 0,
+   "SYNCID2": SYNCID2,
+ }
+
+ return packer.make_can_msg("RSA2", 0, values)
+
+def create_rsa3_command(packer,OVSPVALL,OVSPVALM,OVSPVALH,NTLVLSPD,TSRSPU):
+ """Creates a CAN message for the Road Sign System."""
+ values = {
+   "TSREQPD": 1,
+   "TSRMSW": 1,
+   "OTSGNNTM": 3,
+   "NTLVLSPD": NTLVLSPD,
+   "OVSPNTM": 3,
+   "OVSPVALL": OVSPVALL,
+   "OVSPVALM": OVSPVALM,
+   "OVSPVALH": OVSPVALH,
+   "TSRSPU": TSRSPU,
+ }
+
+ return packer.make_can_msg("RSA3", 0, values)
 
 def accel_hysteresis(accel, accel_steady, enabled):
 
@@ -38,7 +115,13 @@ class CarController():
     self.alert_active = False
     self.last_standstill = False
     self.standstill_req = False
-
+    self.blindspot_blink_counter_left = 0
+    self.blindspot_blink_counter_right = 0
+    self.blindspot_debug_enabled_left = False
+    self.blindspot_debug_enabled_right = False
+    
+    self.rsa_sync_counter = 0
+    
     self.last_fault_frame = -200
     self.steer_rate_limited = False
 
@@ -55,7 +138,7 @@ class CarController():
     self.blinker_end_frame = 0.
 
   def update(self, enabled, CS, frame, actuators, pcm_cancel_cmd, hud_alert,
-             left_line, right_line, lead, left_lane_depart, right_lane_depart, dragonconf):
+             left_line, right_line, lead, left_lane_depart, right_lane_depart, dragonconf, lkas):
 
     # *** compute control surfaces ***
 
@@ -103,7 +186,8 @@ class CarController():
       self.last_fault_frame = frame
 
     # Cut steering for 2s after fault
-    if not enabled or (frame - self.last_fault_frame < 100) or abs(CS.out.steeringRate) > 100 or (abs(CS.out.steeringAngle) > 150 and CS.CP.carFingerprint in [CAR.RAV4H, CAR.PRIUS]):
+    if lkas == 0 or not enabled or (frame - self.last_fault_frame < 100) or abs(CS.out.steeringRate) > 100 or abs(CS.out.steeringAngle) > 400 \
+    or (abs(CS.out.steeringAngle) > 150 and CS.CP.carFingerprint in [CAR.RAV4H, CAR.PRIUS]):
       apply_steer = 0
       apply_steer_req = 0
     else:
@@ -195,7 +279,7 @@ class CarController():
 
 
     if (frame % 100 == 0 or send_ui) and Ecu.fwdCamera in self.fake_ecus:
-      can_sends.append(create_ui_command(self.packer, steer_alert, pcm_cancel_cmd, left_line, right_line, dragon_left_lane_depart, dragon_right_lane_depart))
+      can_sends.append(create_ui_command(self.packer, steer_alert, pcm_cancel_cmd, left_line, right_line, dragon_left_lane_depart, dragon_right_lane_depart, lkas))
 
     if frame % 100 == 0 and Ecu.dsu in self.fake_ecus:
       can_sends.append(create_fcw_command(self.packer, fcw_alert))
@@ -205,5 +289,84 @@ class CarController():
     for (addr, ecu, cars, bus, fr_step, vl) in STATIC_MSGS:
       if frame % fr_step == 0 and ecu in self.fake_ecus and CS.CP.carFingerprint in cars:
         can_sends.append(make_can_msg(addr, vl, bus))
+
+    # Enable blindspot debug mode once
+    if frame > 1000 and not (CS.CP.carFingerprint in TSS2_CAR or CS.CP.carFingerprint in [CAR.CAMRY, CAR.CAMRYH, CAR.AVALON_2021]): # 10 seconds after start and not a tss2 car
+      if BLINDSPOTALWAYSON:
+        self.blindspot_blink_counter_left += 1
+        self.blindspot_blink_counter_right += 1
+        #print("debug blindspot alwayson!")
+      elif CS.out.leftBlinker:
+        self.blindspot_blink_counter_left += 1
+        #print("debug Left Blinker on")
+      elif CS.out.rightBlinker:
+        self.blindspot_blink_counter_right += 1
+        #print("debug Right Blinker on")
+      else:
+        self.blindspot_blink_counter_left = 0
+        self.blindspot_blink_counter_right = 0
+        if self.blindspot_debug_enabled_left:
+          can_sends.append(set_blindspot_debug_mode(LEFT_BLINDSPOT, False))
+          #can_sends.append(make_can_msg(0x750, b'\x41\x02\x10\x01\x00\x00\x00\x00', 0))
+          self.blindspot_debug_enabled_left = False
+          #print ("debug Left blindspot debug disabled")
+        if self.blindspot_debug_enabled_right:
+          can_sends.append(set_blindspot_debug_mode(RIGHT_BLINDSPOT, False))
+          #can_sends.append(make_can_msg(0x750, b'\x42\x02\x10\x01\x00\x00\x00\x00', 0))
+          self.blindspot_debug_enabled_right = False
+          #print("debug Right blindspot debug disabled")
+      if self.blindspot_blink_counter_left > 9 and not self.blindspot_debug_enabled_left: #check blinds
+        can_sends.append(set_blindspot_debug_mode(LEFT_BLINDSPOT, True))
+        #can_sends.append(make_can_msg(0x750, b'\x41\x02\x10\x60\x00\x00\x00\x00', 0))
+        #print("debug Left blindspot debug enabled")
+        self.blindspot_debug_enabled_left = True
+      if self.blindspot_blink_counter_right > 5 and not self.blindspot_debug_enabled_right: #enable blindspot debug mode
+        if CS.out.vEgo > 6: #polling at low speeds switches camera off
+          #can_sends.append(make_can_msg(0x750, b'\x42\x02\x10\x60\x00\x00\x00\x00', 0))
+          can_sends.append(set_blindspot_debug_mode(RIGHT_BLINDSPOT, True))
+          #print("debug Right blindspot debug enabled")
+          self.blindspot_debug_enabled_right = True
+      if CS.out.vEgo < 6 and self.blindspot_debug_enabled_right: # if enabled and speed falls below 6m/s
+        #can_sends.append(make_can_msg(0x750, b'\x42\x02\x10\x01\x00\x00\x00\x00', 0))
+        can_sends.append(set_blindspot_debug_mode(RIGHT_BLINDSPOT, False))
+        self.blindspot_debug_enabled_right = False
+        #print("debug Right blindspot debug disabled")
+    if self.blindspot_debug_enabled_left:
+      if frame % 20 == 0 and frame > 1001:  # Poll blindspots at 5 Hz
+        can_sends.append(poll_blindspot_status(LEFT_BLINDSPOT))
+        #can_sends.append(make_can_msg(0x750, b'\x41\x02\x21\x69\x00\x00\x00\x00', 0))
+        #print("debug Left blindspot poll")
+    if self.blindspot_debug_enabled_right:
+      if frame % 20 == 10 and frame > 1005:  # Poll blindspots at 5 Hz
+        #can_sends.append(make_can_msg(0x750, b'\x42\x02\x21\x69\x00\x00\x00\x00', 0))
+        can_sends.append(poll_blindspot_status(RIGHT_BLINDSPOT))
+        #print("debug Right blindspot poll")
+        
+    if frame > 200:
+      if frame % 100 == 0:
+        if speed_signs_in_mph:
+          smartspeed =round(CS.smartspeed*2.23694)
+          tsgn1 = 36 if CS.smartspeed > 0 else 0
+        else:
+          smartspeed = round(CS.smartspeed*3.6)
+          tsgn1 = 1 if CS.smartspeed > 0 else 0
+        TSGNHLT1 = 1 if CS.out.vEgo > CS.smartspeed else 0
+        can_sends.append(create_rsa1_command(self.packer,tsgn1,smartspeed,0,TSGNHLT1,CS.tsgn1,CS.spdval1,CS.splsgn1,CS.tsgnhlt1,self.rsa_sync_counter + 1))
+        can_sends.append(create_rsa2_command(self.packer,CS.tsgn3,CS.splsgn3,CS.tsgn4,CS.splsgn4,1,1,3,1,self.rsa_sync_counter + 1))
+        if CS.CP.carFingerprint in TSS2_CAR:
+          can_sends.append(create_rsa3_command(self.packer,1,3,5,1,2))
+        else:
+          can_sends.append(create_rsa3_command(self.packer,2,5,10,3,1))
+        #print (str(self.rsa_sync))
+        self.rsa_sync_counter = (self.rsa_sync_counter + 1 ) % 15
+    else:
+      if frame % 100 == 0:
+        can_sends.append(create_rsa1_command(self.packer,0,0,0,0,0,0,0,0,self.rsa_sync_counter + 1))
+        can_sends.append(create_rsa2_command(self.packer,0,0,0,0,0,0,0,0,self.rsa_sync_counter + 1))
+        if CS.CP.carFingerprint in TSS2_CAR:
+          can_sends.append(create_rsa3_command(self.packer,0,0,0,1,0))
+        else:
+          can_sends.append(create_rsa3_command(self.packer,-5,-5,-5,3,1))
+        self.rsa_sync_counter = (self.rsa_sync_counter + 1 ) % 15
 
     return can_sends

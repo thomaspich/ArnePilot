@@ -21,6 +21,9 @@ from selfdrive.controls.lib.alertmanager import AlertManager
 from selfdrive.controls.lib.vehicle_model import VehicleModel
 from selfdrive.controls.lib.planner import LON_MPC_STEP
 from selfdrive.locationd.calibrationd import Calibration
+#from common.travis_checker import travis
+#import threading
+from selfdrive.interceptor import Interceptor
 
 LDW_MIN_SPEED = 31 * CV.MPH_TO_MS
 LANE_DEPARTURE_THRESHOLD = 0.1
@@ -59,9 +62,11 @@ class Controls:
     self.sm = sm
     if self.sm is None:
       socks = ['thermal', 'health', 'model', 'liveCalibration', 'radarState', 'frontFrame',
-                                     'dMonitoringState', 'plan', 'pathPlan', 'liveLocationKalman', 'dragonConf']
+                                     'dMonitoringState', 'plan', 'pathPlan', 'liveLocationKalman', 'dragonConf', 'testJoystick']
       ignore_alive = ['dragonConf'] if params.get('dp_driver_monitor') == b'1' else ['dMonitoringState', 'dragonConf']
       self.sm = messaging.SubMaster(socks, ignore_alive=ignore_alive)
+
+    self.interceptor = Interceptor()
 
     self.can_sock = can_sock
     if can_sock is None:
@@ -124,8 +129,8 @@ class Controls:
     self.active = False
     self.can_rcv_error = False
     self.soft_disable_timer = 0
-    self.v_cruise_kph = 255
-    self.v_cruise_kph_last = 0
+    self.v_cruise_kph = 255.0
+    self.v_cruise_kph_last = 0.0
     self.mismatch_counter = 0
     self.can_error_counter = 0
     self.last_blinker_frame = 0
@@ -234,18 +239,18 @@ class Controls:
     if not self.sm.alive['plan'] and self.sm.alive['pathPlan']:
       # only plan not being received: radar not communicating
       self.events.add(EventName.radarCommIssue)
-    elif not self.sm.all_alive_and_valid():
+    elif not self.sm.all_alive_and_valid() and self.sm.frame > 5 / DT_CTRL:
       self.sm.print_dead_and_not_valid()
       self.events.add(EventName.commIssue)
-    if not self.sm['pathPlan'].mpcSolutionValid:
+    if not self.sm['pathPlan'].mpcSolutionValid and self.sm.frame > 5 / DT_CTRL:
       self.events.add(EventName.steerTempUnavailable if self.sm['dragonConf'].dpAtl else EventName.plannerError)
-    # if not self.sm['liveLocationKalman'].sensorsOK and not NOSENSOR:
-    #   if self.sm.frame > 5 / DT_CTRL:  # Give locationd some time to receive all the inputs
-    #     self.events.add(EventName.sensorDataInvalid)
-    # if not self.sm['liveLocationKalman'].gpsOK and (self.distance_traveled > 1000):
-    #   # Not show in first 1 km to allow for driving out of garage. This event shows after 5 minutes
-    #   if not (SIMULATION or NOSENSOR):  # TODO: send GPS in carla
-    #     self.events.add(EventName.noGps)
+    if not self.sm['liveLocationKalman'].sensorsOK and not NOSENSOR:
+      if self.sm.frame > 5 / DT_CTRL:  # Give locationd some time to receive all the inputs
+        self.events.add(EventName.sensorDataInvalid)
+    if not self.sm['liveLocationKalman'].gpsOK and (self.distance_traveled > 1000):
+      # Not show in first 1 km to allow for driving out of garage. This event shows after 5 minutes
+      if not (SIMULATION or NOSENSOR):  # TODO: send GPS in carla
+        self.events.add(EventName.noGps)
     if not self.sm['pathPlan'].paramsValid:
       self.events.add(EventName.vehicleModelInvalid)
     if not self.sm['liveLocationKalman'].posenetOK:
@@ -315,6 +320,9 @@ class Controls:
 
     self.sm.update(0)
 
+    # Update Interceptor
+    self.interceptor.update(self.sm['testJoystick'], self.sm.logMonoTime['testJoystick'], sec_since_boot()*1e9)
+
     # Check for CAN timeout
     if not can_strs:
       self.can_error_counter += 1
@@ -338,14 +346,19 @@ class Controls:
 
   def state_transition(self, CS):
     """Compute conditional state transitions and execute actions on state transitions"""
-
+    #if self.v_cruise_kph_last != self.v_cruise_kph:
+    #  print("v_cruise_kph_last = " + str(self.v_cruise_kph_last) + " v_cruise_kph = " + str(self.v_cruise_kph))
     self.v_cruise_kph_last = self.v_cruise_kph
 
     # if stock cruise is completely disabled, then we can use our own set speed logic
     if not self.CP.enableCruise:
+      #print("here")
       self.v_cruise_kph = update_v_cruise(self.v_cruise_kph, CS.buttonEvents, self.enabled)
     elif self.CP.enableCruise and CS.cruiseState.enabled:
+      #print("there")
       self.v_cruise_kph = CS.cruiseState.speed * CV.MS_TO_KPH
+      #print(" v_cruise_kph = " + str(self.v_cruise_kph))
+    
 
     # decrease the soft disable timer at every step, as it's reset on
     # entrance in SOFT_DISABLING state
@@ -403,7 +416,9 @@ class Controls:
           else:
             self.state = State.enabled
           self.current_alert_types.append(ET.ENABLE)
+          #print("somewhere")
           self.v_cruise_kph = initialize_v_cruise(CS.vEgo, CS.buttonEvents, self.v_cruise_kph_last)
+          #print("self.v_cruise_kph = " + str(self.v_cruise_kph))
 
     # Check if actuators are enabled
     self.active = self.state == State.enabled or self.state == State.softDisabling
@@ -461,6 +476,12 @@ class Controls:
 
         if left_deviation or right_deviation:
           self.events.add(EventName.steerSaturated)
+
+    # Interceptor; (signal, index, part, scale=1.0)
+    actuators.gas = self.interceptor.override_axis(actuators.gas, 1, 'negative', .5)  # Rescale for Toyota to maxgas=0.5
+    actuators.brake = self.interceptor.override_axis(actuators.brake, 1, 'positive', 1.)
+    actuators.steer = self.interceptor.override_axis(actuators.steer, 2, 'full', -1.)  # For torque based steering
+    actuators.steerAngle = self.interceptor.override_axis(actuators.steer, 2, 'full', -45.)  # For angle based steering, limit 45 deg
 
     return actuators, v_acc_sol, a_acc_sol, lac_log
 
@@ -547,6 +568,7 @@ class Controls:
     controlsState.vEgoRaw = CS.vEgoRaw
     controlsState.angleSteers = CS.steeringAngle
     controlsState.curvature = self.VM.calc_curvature(steer_angle_rad, CS.vEgo)
+    controlsState.decelForTurn = self.sm['plan'].decelForTurn
     controlsState.steerOverride = CS.steeringPressed
     controlsState.state = self.state
     controlsState.engageable = not self.events.any(ET.NO_ENTRY)
