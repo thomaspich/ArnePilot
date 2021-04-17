@@ -107,9 +107,9 @@ def set_params(new_version: bool, failed_count: int, exception: Optional[str]) -
   params = Params()
 
   params.put("UpdateFailedCount", str(failed_count))
-  if failed_count == 0:
-    t = datetime.datetime.utcnow().isoformat()
-    params.put("LastUpdateTime", t.encode('utf8'))
+  #if failed_count == 0:
+    #t = datetime.datetime.utcnow().isoformat()
+    #params.put("LastUpdateTime", t.encode('utf8'))
 
   if exception is None:
     params.delete("LastUpdateException")
@@ -120,7 +120,7 @@ def set_params(new_version: bool, failed_count: int, exception: Optional[str]) -
     branch_name = run(["git", "rev-parse", "--abbrev-ref", "HEAD"], FINALIZED).rstrip()
     if branch_name == "testing":
       postfix = ''
-    elif branch_name == "devel-i18n":
+    elif branch_name == "DP08-clean":
       postfix = '-DEV'
     else:
       postfix = '-REL'
@@ -323,7 +323,7 @@ def fetch_update(wait_helper: WaitTimeHelper) -> bool:
 
 class AutoReboot:
   def __init__(self):
-    self.min_reboot_time = 5. * 60
+    self.min_reboot_time = 5. * 30
     self.need_reboot = False
     self.time_offroad = 0.0
 

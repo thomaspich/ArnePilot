@@ -342,7 +342,7 @@ class CarController():
         can_sends.append(poll_blindspot_status(RIGHT_BLINDSPOT))
         #print("debug Right blindspot poll")
         
-    if frame > 200:
+    if frame > 200 and CS.CP.carFingerprint not in TSS2_CAR:
       if frame % 100 == 0:
         if speed_signs_in_mph:
           smartspeed =round(CS.smartspeed*2.23694)

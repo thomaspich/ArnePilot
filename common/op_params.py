@@ -80,6 +80,7 @@ class opParams:
                         'cloak': Param(True, bool, "make comma believe you are on their fork"),
                         #'corolla_tss2_d_tuning': Param(False, bool, 'lateral tuning using PID w/ true derivative'),
                         'default_brake_distance': Param(250.0, VT.number, 'Distance in m to start braking for mapped speeds.'),
+                        'distance_traveled': Param(False, bool, 'Whether to log distance_traveled or not.'),
                         #'enable_long_derivative': Param(False, bool, 'If you have longitudinal overshooting, enable this! This enables derivative-based\n'
                                                                     # 'integral wind-down to help reduce overshooting within the long PID loop'),
                         #'dynamic_follow': Param('normal', str, "Can be: ('close', 'normal', 'far'): Left to right increases in following distance.\n"

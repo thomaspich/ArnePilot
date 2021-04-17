@@ -181,8 +181,36 @@ static void update_track_data(UIState *s, const cereal::ModelDataV2::XYZTData::R
 }
 
 static void ui_draw_track(UIState *s, track_vertices_data *pvd) {
-  NVGpaint track_bg = nvgLinearGradient(s->vg, s->fb_w, s->fb_h, s->fb_w, s->fb_h * .4,
+  if (pvd->cnt == 0) return;
+
+   nvgBeginPath(s->vg);
+   nvgMoveTo(s->vg, pvd->v[0].x, pvd->v[0].y);
+   for (int i=1; i<pvd->cnt; i++) {
+     nvgLineTo(s->vg, pvd->v[i].x, pvd->v[i].y);
+   }
+   nvgClosePath(s->vg);
+
+   NVGpaint track_bg;
+   if (s->scene.controls_state.getEnabled()) {
+     // Draw colored MPC track Kegman's
+     if (s->scene.steerOverride) {
+       track_bg = nvgLinearGradient(s->vg, s->fb_w, s->fb_h, s->fb_w, s->fb_h*.4,
+         nvgRGBA(0, 191, 255, 255), nvgRGBA(0, 95, 128, 50));
+     } else {
+       int torque_scale = (int)fabs(510*(float)s->scene.output_scale);
+       int red_lvl = fmin(255, torque_scale);
+       int green_lvl = fmin(255, 510-torque_scale);
+       track_bg = nvgLinearGradient(s->vg, s->fb_w, s->fb_h, s->fb_w, s->fb_h*.4,
+         nvgRGBA(          red_lvl,            green_lvl,  0, 255),
+         nvgRGBA((int)(0.5*red_lvl), (int)(0.5*green_lvl), 0, 50));
+     }
+   } else {
+     // Draw white vision track
+     track_bg = nvgLinearGradient(s->vg, s->fb_w, s->fb_h, s->fb_w, s->fb_h * .4,
                                         COLOR_WHITE, COLOR_WHITE_ALPHA(0));
+  }
+  nvgFillPaint(s->vg, track_bg);
+  nvgFill(s->vg);
   ui_draw_line(s, &pvd->v[0], pvd->cnt, nullptr, &track_bg);
 }
 

@@ -14,10 +14,20 @@ from cereal import log
 LaneChangeState = log.PathPlan.LaneChangeState
 LaneChangeDirection = log.PathPlan.LaneChangeDirection
 
-LOG_MPC = os.environ.get('LOG_MPC', False)
+LOG_MPC = os.environ.get('LOG_MPC', True)
 
 LANE_CHANGE_SPEED_MIN = 45 * CV.MPH_TO_MS
 LANE_CHANGE_TIME_MAX = 10.
+
+# dp
+
+DP_OFF = 0
+
+DP_ECO = 1
+
+DP_NORMAL = 2
+
+DP_SPORT = 3
 
 DESIRES = {
   LaneChangeDirection.none: {
@@ -91,7 +101,7 @@ class PathPlanner():
     v_ego = sm['carState'].vEgo
     angle_steers = sm['carState'].steeringAngle
     active = sm['controlsState'].active
-
+    dp_profile = sm['dragonConf'].dpAccelProfile
     angle_offset = sm['liveParameters'].angleOffset
 
     # Run MPC
@@ -149,7 +159,7 @@ class PathPlanner():
           # we only set timer when in preLaneChange state, dragon_auto_lc_delay delay
           if self.lane_change_state == LaneChangeState.preLaneChange:
             self.dragon_auto_lc_timer = cur_time + sm['dragonConf'].dpAutoLcDelay
-        elif cur_time >= self.dragon_auto_lc_timer:
+        elif cur_time >= (self.dragon_auto_lc_timer - dp_profile):
           # if timer is up, we set torque_applied to True to fake user input
           torque_applied = True
           self.dp_did_auto_lc = True

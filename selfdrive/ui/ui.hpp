@@ -178,6 +178,8 @@ typedef struct UIScene {
   bool rightBlinker;
   bool brakeLights;
   int blinker_blinkingrate;
+  bool steerOverride;
+  float output_scale;
   // for blind spot
   bool leftBlindspot;
   bool rightBlindspot;

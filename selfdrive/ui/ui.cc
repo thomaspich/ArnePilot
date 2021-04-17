@@ -123,6 +123,11 @@ void update_sockets(UIState *s) {
     scene.controls_state = event.getControlsState();
 
     // TODO: the alert stuff shouldn't be handled here
+    s->scene.steerOverride= scene.controls_state.getSteerOverride();
+    s->scene.output_scale = scene.controls_state.getLateralControlState().getPidState().getOutput() + 
+      scene.controls_state.getLateralControlState().getLqrState().getOutput() + 
+      scene.controls_state.getLateralControlState().getIndiState().getOutput();
+
     auto alert_sound = scene.controls_state.getAlertSound();
     if (scene.alert_type.compare(scene.controls_state.getAlertType()) != 0) {
       if (alert_sound == AudibleAlert::NONE) {

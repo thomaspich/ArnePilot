@@ -48,7 +48,7 @@ def upload_data():
         ftp.storbinary("STOR /{}/{}".format(username, filename + ".gz"), f)
       ftp.quit()
       os.remove(filepath)
-      os.remove("/data/" + filename + ".gz")
+      os.remove("/data/*.gz")
       t = datetime.datetime.utcnow().isoformat()
       params.put("LastUpdateTime", t.encode('utf8'))
       return True
